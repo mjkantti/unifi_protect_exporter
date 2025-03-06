@@ -99,6 +99,21 @@ class NVRCollector(object):
             "Camera Status",
             labels=self.cam_common_label_names + ['cam_state'],
         )
+        self.cam_last_seen = GaugeMetricFamily(
+            "unvr_cam_last_seen",
+            "Camera last_seen",
+            labels=self.cam_common_label_names,
+        )
+        self.cam_last_motion = GaugeMetricFamily(
+            "unvr_cam_last_motion",
+            "Camera last motion",
+            labels=self.cam_common_label_names,
+        )
+        self.cam_last_disconnect = GaugeMetricFamily(
+            "unvr_cam_last_disconnect",
+            "Camera last disconnect",
+            labels=self.cam_common_label_names,
+        )
 
     def collect(self):
         logging.info(f"Incoming request {self.conf['host']}")
@@ -117,6 +132,9 @@ class NVRCollector(object):
             yield self.cam_txbytes
             yield self.cam_rxbytes
             yield self.cam_state
+            yield self.cam_last_seen
+            yield self.cam_last_motion
+            yield self.cam_last_disconnect
 
     def login(self):
         # start unifi session
@@ -208,12 +226,22 @@ class NVRCollector(object):
         self.cam_rxbytes.samples.clear()
         self.cam_txbytes.samples.clear()
         self.cam_state.samples.clear()
+        self.cam_last_seen.samples.clear()
+        self.cam_last_motion.samples.clear()
+        self.cam_last_disconnect.samples.clear()
         for cam in js.get('cameras', {}):
-            if cam['connectionHost'] != nvrHost:
+            if not cam['isAdopted']:
                 continue
-            camInfo = [nvrName] + [cam[key] for key in ['connectionHost', 'name', 'host', 'mac']]
-            self.cam_rxbytes.add_metric(labels = camInfo, value = cam['stats']['rxBytes'])
-            self.cam_txbytes.add_metric(labels = camInfo, value = cam['stats']['txBytes'])
+            camInfo = [nvrName, nvrHost] + [cam[key] for key in ['name', 'host', 'mac']]
+            self.cam_last_seen.add_metric(labels = camInfo, value = cam['lastSeen'])
+            if cam.get('lastMotion'):
+                self.cam_last_motion.add_metric(labels = camInfo, value = cam['lastMotion'])
+            self.cam_last_disconnect.add_metric(labels = camInfo, value = cam['lastDisconnect'])
+
+            if cam.get('stats', {}).get('rxBytes'):
+                self.cam_rxbytes.add_metric(labels = camInfo, value = cam.get('stats', {}).get('rxBytes', 0))
+            if cam.get('stats', {}).get('txBytes'):
+                self.cam_txbytes.add_metric(labels = camInfo, value = cam.get('stats', {}).get('txBytes', 0))
             
             state = -1
             st = cam.get('state')
