@@ -20,139 +20,57 @@ class NVRCollector(object):
         self.ts = 0
 
         # Metrics
-        self.nvr_common_label_names = ['id', 'name', 'host', 'mac']
-        self.cam_common_label_names = ['name', 'host', 'cameraName', 'cameraHost', 'cameraMac']
+        nvr_common_label_names = ['id', 'name', 'host', 'mac']
+        cam_common_label_names = ['name', 'host', 'cameraName', 'cameraHost', 'cameraMac']
 
-        self.cpu_load = GaugeMetricFamily(
-            "unvr_cpu_load",
-            "CPU Average Load",
-            labels=self.nvr_common_label_names,
-        )
+        self.metrics = {}
+        self.metrics['cpu_load'] = GaugeMetricFamily('unvr_cpu_load', 'CPU Average Load', labels=nvr_common_label_names)
+        self.metrics['cpu_temperature'] = GaugeMetricFamily('unvr_cpu_temperature', 'CPU Temperature', labels=nvr_common_label_names)
+
+        self.metrics['hdd_state'] = GaugeMetricFamily('unvr_hard_drive_state', 'NVR Hard Drive State', labels=nvr_common_label_names + ['hard_disk_state'])
+
+        hdd_label_names = nvr_common_label_names + ['hdd_slot', 'hdd_model', 'hdd_health', 'hdd_state']
+        self.metrics['hdd_health'] = GaugeMetricFamily('unvr_hard_disk_health', 'NVR Hard Disk Health', labels=hdd_label_names)
+        self.metrics['hdd_size'] = GaugeMetricFamily('unvr_hard_disk_size', 'NVR Hard Disk Size', labels=hdd_label_names)
+        self.metrics['hdd_poweronhrs'] = CounterMetricFamily('unvr_hard_disk_poweronhrs', 'NVR Hard Disk Power On Hours', labels=hdd_label_names)
+        self.metrics['hdd_temperature'] = GaugeMetricFamily('unvr_hard_disk_temperature', 'NVR Hard Disk Temperature', labels=hdd_label_names)
+
+        self.metrics['storage_health'] = GaugeMetricFamily('unvr_storage_health', 'NVR Storage Health', labels=nvr_common_label_names + ['device', 'health', 'action', 'space_type'])
         
-        self.cpu_temperature = GaugeMetricFamily(
-            "unvr_cpu_temperature",
-            "CPU Temperature",
-            labels=self.nvr_common_label_names,
-        )
+        self.metrics['mem_free'] = GaugeMetricFamily('unvr_memory_free', 'Memory Free', labels=nvr_common_label_names)
+        self.metrics['mem_available'] = GaugeMetricFamily('unvr_memory_available', 'Memory Available', labels=nvr_common_label_names)
+        self.metrics['mem_total'] = GaugeMetricFamily('unvr_memory_total', 'Memory Total', labels=nvr_common_label_names)
         
-        self.hdd_state = GaugeMetricFamily(
-            "unvr_hard_drive_state",
-            "NVR Hard Drive State",
-            labels=self.nvr_common_label_names + ['hard_disk_state'],
-        )
-        
-        self.hdd_health = GaugeMetricFamily(
-            "unvr_hard_disk_health",
-            "NVR Hard Disk Health",
-            labels=self.nvr_common_label_names + ['hdd_slot', 'hdd_model', 'hdd_health', 'hdd_state'],
-        )
-        
-        self.hdd_size = GaugeMetricFamily(
-            "unvr_hard_disk_size",
-            "NVR Hard Disk Size",
-            labels=self.nvr_common_label_names + ['hdd_slot', 'hdd_model', 'hdd_health', 'hdd_state'],
-        )
-        
-        self.hdd_poweronhrs = CounterMetricFamily(
-            "unvr_hard_disk_poweronhrs",
-            "NVR Hard Disk Power On Hours",
-            labels=self.nvr_common_label_names + ['hdd_slot', 'hdd_model', 'hdd_health', 'hdd_state'],
-        )
-        
-        self.hdd_temperature = GaugeMetricFamily(
-            "unvr_hard_disk_temperature",
-            "NVR Hard Disk Temperature",
-            labels=self.nvr_common_label_names + ['hdd_slot', 'hdd_model', 'hdd_health', 'hdd_state'],
-        )
-        self.storage_health = GaugeMetricFamily(
-            "unvr_storage_health",
-            "NVR Storage Health",
-            labels=self.nvr_common_label_names + ['device', 'health', 'action', 'space_type'],
-        )
-        self.memory_free = GaugeMetricFamily(
-            "unvr_memory_free",
-            "Memory Free",
-            labels=self.nvr_common_label_names,
-        )
-        self.memory_available = GaugeMetricFamily(
-            "unvr_memory_available",
-            "Memory Available",
-            labels=self.nvr_common_label_names,
-        )
-        self.memory_total = GaugeMetricFamily(
-            "unvr_memory_total",
-            "Memory Total",
-            labels=self.nvr_common_label_names,
-        )
-        self.cam_txbytes = CounterMetricFamily(
-            "unvr_cam_txbytes",
-            "Camera TX Bytes",
-            labels=self.cam_common_label_names,
-        )
-        self.cam_rxbytes = CounterMetricFamily(
-            "unvr_cam_rxbytes",
-            "Camera RX Bytes",
-            labels=self.cam_common_label_names,
-        )
-        self.cam_state = GaugeMetricFamily(
-            "unvr_cam_state",
-            "Camera Status",
-            labels=self.cam_common_label_names + ['cam_state'],
-        )
-        self.cam_last_seen = GaugeMetricFamily(
-            "unvr_cam_last_seen",
-            "Camera last_seen",
-            labels=self.cam_common_label_names,
-        )
-        self.cam_last_motion = GaugeMetricFamily(
-            "unvr_cam_last_motion",
-            "Camera last motion",
-            labels=self.cam_common_label_names,
-        )
-        self.cam_last_disconnect = GaugeMetricFamily(
-            "unvr_cam_last_disconnect",
-            "Camera last disconnect",
-            labels=self.cam_common_label_names,
-        )
+        self.metrics['cam_txbytes'] = CounterMetricFamily('unvr_cam_txbytes', 'Camera TX Bytes', labels=cam_common_label_names)
+        self.metrics['cam_rxbytes'] = CounterMetricFamily('unvr_cam_rxbytes', 'Camera RX Bytes', labels=cam_common_label_names)
+        self.metrics['cam_state'] = GaugeMetricFamily('unvr_cam_state', 'Camera Status', labels=cam_common_label_names + ['cam_state'])
+        self.metrics['cam_last_seen'] = GaugeMetricFamily('unvr_cam_last_seen', 'Camera last_seen', labels=cam_common_label_names)
+        self.metrics['cam_last_motion'] = GaugeMetricFamily('unvr_cam_last_motion', 'Camera last motion', labels=cam_common_label_names)
+        self.metrics['cam_last_disconnect'] = GaugeMetricFamily('unvr_cam_last_disconnect', 'Camera last disconnect', labels=cam_common_label_names)
 
     def collect(self):
         logging.info(f"Incoming request {self.conf['host']}")
         if time() - self.ts < 15:
-            yield self.cpu_load
-            yield self.cpu_temperature
-            yield self.hdd_state
-            yield self.hdd_health
-            yield self.hdd_size
-            yield self.hdd_poweronhrs
-            yield self.hdd_temperature
-            yield self.storage_health
-            yield self.memory_free
-            yield self.memory_available
-            yield self.memory_total
-            yield self.cam_txbytes
-            yield self.cam_rxbytes
-            yield self.cam_state
-            yield self.cam_last_seen
-            yield self.cam_last_motion
-            yield self.cam_last_disconnect
+            for v in self.metrics.values():
+                yield v
 
     def login(self):
         # start unifi session
         logging.warning(f"Login {self.conf['host']}")
         req = self.session.post(self.conf.get('host') + '/api/auth/login', data={'username': self.conf.get('username'), 'password': self.conf.get('password'), 'remember': True}, verify=False)
         if req.status_code != 200:
-            raise Exception(f"Could not login to NVR: {req.text}")
+            raise Exception(f'Could not login to NVR: {req.text}')
 
     def get_data(self):
         # Get Bootstrap json
         bootstrap = self.session.get(f"{self.conf.get('host')}/proxy/protect/api/bootstrap")
         if bootstrap.status_code == 401:
-            logging.info(f"Got error 401, Performing login")
+            logging.info(f'Got error 401, Performing login')
             self.login()
             return self.get_data()
 
         elif bootstrap.status_code != 200:
-            raise Exception(f"Got Error: {bootstrap.text}")()
+            raise Exception(f'Got Error: {bootstrap.text}')()
 
         return bootstrap.json()
 
@@ -168,7 +86,7 @@ class NVRCollector(object):
             except Exception as e:
                 err_counter += 1
                 logging.error(
-                    f"Unable to collect metrics from NVR. {e}\n{traceback.format_exc()}"
+                    f'Unable to collect metrics from NVR. {e}\n{traceback.format_exc()}'
                 )
 
     def get_metrics(self, js):
@@ -178,89 +96,77 @@ class NVRCollector(object):
 
         basic_info = [nvr[key] for key in ['id', 'name', 'host', 'mac']]
 
-        # CPU
-        self.cpu_load.samples.clear()
-        self.cpu_load.add_metric(labels = basic_info, value = nvr['systemInfo']['cpu']['averageLoad'])
-        self.cpu_temperature.samples.clear()
-        self.cpu_temperature.add_metric(labels = basic_info, value = nvr['systemInfo']['cpu']['temperature'])
+        for v in self.metrics.values():
+            v.samples.clear()
 
-        # Hard Disk
-        st = 2 if nvr.get('hardDriveState') == 'ok' else 0
-        self.hdd_state.samples.clear()
-        self.hdd_state.add_metric(labels = basic_info + [nvr['hardDriveState']], value = st)
+        # CPU
+        self.metrics['cpu_load'].add_metric(labels = basic_info, value = nvr['systemInfo']['cpu']['averageLoad'])
+        self.metrics['cpu_temperature'].add_metric(labels = basic_info, value = nvr['systemInfo']['cpu']['temperature'])
+
+        # Hard Disk, what is this?
+        st = 0 if nvr.get('hardDriveState') == 'ok' else 2
+        self.metrics['hdd_state'].samples.clear()
+        self.metrics['hdd_state'].add_metric(labels = basic_info + [nvr['hardDriveState']], value = st)
 
         # HDD
-        self.hdd_health.samples.clear()
-        self.hdd_size.samples.clear()
-        self.hdd_poweronhrs.samples.clear()
-        self.hdd_temperature.samples.clear()
         for disk in nvr['systemInfo']['ustorage']['disks']:
-            v = 2 if disk.get('healthy') == 'good' else 0
-            self.hdd_health.add_metric(
+            v = 0 if disk.get('healthy') == 'good' else 2
+            self.metrics['hdd_health'].add_metric(
                 labels = basic_info + [str(disk.get(key)) for key in ['slot', 'model', 'healthy', 'state']],
                 value = v)
-            self.hdd_size.add_metric(
+            self.metrics['hdd_size'].add_metric(
                 labels = basic_info + [str(disk.get(key)) for key in ['slot', 'model', 'healthy', 'state']],
                 value = disk.get('size', 0))
-            self.hdd_poweronhrs.add_metric(
+            self.metrics['hdd_poweronhrs'].add_metric(
                 labels = basic_info + [str(disk.get(key)) for key in ['slot', 'model', 'healthy', 'state']],
                 value = disk.get('poweronhrs', 0))
-            self.hdd_temperature.add_metric(
+            self.metrics['hdd_temperature'].add_metric(
                 labels = basic_info + [str(disk.get(key)) for key in ['slot', 'model', 'healthy', 'state']],
                 value = disk.get('temperature', 0))
         
-        self.storage_health.samples.clear()
         for ldisk in nvr['systemInfo']['ustorage']['space']:
-            st = 2 if ldisk['health'] == 'health' else 0
-            self.storage_health.add_metric(labels = basic_info + [ldisk[key] for key in ['device', 'health', 'action', 'space_type']], value = st)
+            st = 0 if ldisk['health'] == 'health' else 2
+            self.metrics['storage_health'].add_metric(labels = basic_info + [ldisk[key] for key in ['device', 'health', 'action', 'space_type']], value = st)
         
         # Memory
-        self.memory_free.samples.clear()
-        self.memory_free.add_metric(labels = basic_info, value = nvr['systemInfo']['memory']['free'])
-        self.memory_available.samples.clear()
-        self.memory_available.add_metric(labels = basic_info, value = nvr['systemInfo']['memory']['available'])
-        self.memory_total.samples.clear()
-        self.memory_total.add_metric(labels = basic_info, value = nvr['systemInfo']['memory']['total'])
+        self.metrics['mem_free'].add_metric(labels = basic_info, value = nvr['systemInfo']['memory']['free'])
+        self.metrics['mem_available'].add_metric(labels = basic_info, value = nvr['systemInfo']['memory']['available'])
+        self.metrics['mem_total'].add_metric(labels = basic_info, value = nvr['systemInfo']['memory']['total'])
 
         # Cameras
-        self.cam_rxbytes.samples.clear()
-        self.cam_txbytes.samples.clear()
-        self.cam_state.samples.clear()
-        self.cam_last_seen.samples.clear()
-        self.cam_last_motion.samples.clear()
-        self.cam_last_disconnect.samples.clear()
         for cam in js.get('cameras', {}):
             if not cam.get('isAdopted'):
                 continue
+
             camInfo = [nvrName, nvrHost] + [cam[key] for key in ['name', 'host', 'mac']]
-            self.cam_last_seen.add_metric(labels = camInfo, value = cam['lastSeen'])
+            self.metrics['cam_last_seen'].add_metric(labels = camInfo, value = cam['lastSeen'])
             if cam.get('lastMotion'):
-                self.cam_last_motion.add_metric(labels = camInfo, value = cam['lastMotion'])
-            self.cam_last_disconnect.add_metric(labels = camInfo, value = cam['lastDisconnect'])
+                self.metrics['cam_last_motion'].add_metric(labels = camInfo, value = cam['lastMotion'])
+            self.metrics['cam_last_disconnect'].add_metric(labels = camInfo, value = cam['lastDisconnect'])
 
             if cam.get('stats', {}).get('rxBytes'):
-                self.cam_rxbytes.add_metric(labels = camInfo, value = cam.get('stats', {}).get('rxBytes', 0))
+                self.metrics['cam_rxbytes'].add_metric(labels = camInfo, value = cam.get('stats', {}).get('rxBytes', 0))
             if cam.get('stats', {}).get('txBytes'):
-                self.cam_txbytes.add_metric(labels = camInfo, value = cam.get('stats', {}).get('txBytes', 0))
+                self.metrics['cam_txbytes'].add_metric(labels = camInfo, value = cam.get('stats', {}).get('txBytes', 0))
             
             state = -1
             st = cam.get('state')
             try:
                 state = ['CONNECTED', 'CONNECTING', 'DISCONNECTED'].index(st)
             except ValueError:
-                logging.warning(f"Unknown camera state: {st}")
+                logging.warning(f'Unknown camera state: {st}')
                 pass
 
-            self.cam_state.add_metric(labels = camInfo + [st], value = state)
+            self.metrics['cam_state'].add_metric(labels = camInfo + [st], value = state)
 
 
 def run_collection(s, collector, interval):
     logging.info(f"Refreshing {collector.conf['host']}")
     s.enter(interval, 1, run_collection, argument=(s, collector, interval))
     collector.refresh()
-    logging.info(f"Refresh Done")
+    logging.info(f'Refresh Done')
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     # set config
     logging.basicConfig(encoding='utf-8', level=logging.WARNING)
     requests.packages.urllib3.disable_warnings()
@@ -294,7 +200,7 @@ if __name__ == "__main__":
         username = c.get('username')
         password = c.get('password')
 
-        collector = NVRCollector({"host": host, "username": username, "password": password})
+        collector = NVRCollector({'host': host, 'username': username, 'password': password})
         REGISTRY.register(collector)
         collectors.append(collector)
 
