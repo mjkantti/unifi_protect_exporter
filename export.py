@@ -230,7 +230,7 @@ class NVRCollector(object):
         self.cam_last_motion.samples.clear()
         self.cam_last_disconnect.samples.clear()
         for cam in js.get('cameras', {}):
-            if not cam['isAdopted']:
+            if not cam.get('isAdopted'):
                 continue
             camInfo = [nvrName, nvrHost] + [cam[key] for key in ['name', 'host', 'mac']]
             self.cam_last_seen.add_metric(labels = camInfo, value = cam['lastSeen'])
@@ -245,15 +245,13 @@ class NVRCollector(object):
             
             state = -1
             st = cam.get('state')
-            if st == 'CONNECTED':
-                state = 2
-            elif st == 'CONNECTING':
-                state = 1
-            elif st == 'DISCONNECTED':
-                state = 0
-            else:
+            try:
+                state = ['CONNECTED', 'CONNECTING', 'DISCONNECTED'].index(st)
+            except ValueError:
                 logging.warning(f"Unknown camera state: {st}")
-            self.cam_state.add_metric(labels = camInfo + [cam['state']], value = state)
+                pass
+
+            self.cam_state.add_metric(labels = camInfo + [st], value = state)
 
 
 def run_collection(s, collector, interval):
