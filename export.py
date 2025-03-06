@@ -104,29 +104,19 @@ class NVRCollector(object):
         self.metrics['cpu_temperature'].add_metric(labels = basic_info, value = nvr['systemInfo']['cpu']['temperature'])
 
         # Hard Disk, what is this?
-        st = 0 if nvr.get('hardDriveState') == 'ok' else 2
-        self.metrics['hdd_state'].samples.clear()
-        self.metrics['hdd_state'].add_metric(labels = basic_info + [nvr['hardDriveState']], value = st)
+        self.metrics['hdd_state'].add_metric(labels = basic_info + [nvr['hardDriveState']], value = 0 if nvr.get('hardDriveState') == 'ok' else 2)
 
         # HDD
         for disk in nvr['systemInfo']['ustorage']['disks']:
-            v = 0 if disk.get('healthy') == 'good' else 2
-            self.metrics['hdd_health'].add_metric(
-                labels = basic_info + [str(disk.get(key)) for key in ['slot', 'model', 'healthy', 'state']],
-                value = v)
-            self.metrics['hdd_size'].add_metric(
-                labels = basic_info + [str(disk.get(key)) for key in ['slot', 'model', 'healthy', 'state']],
-                value = disk.get('size', 0))
-            self.metrics['hdd_poweronhrs'].add_metric(
-                labels = basic_info + [str(disk.get(key)) for key in ['slot', 'model', 'healthy', 'state']],
-                value = disk.get('poweronhrs', 0))
-            self.metrics['hdd_temperature'].add_metric(
-                labels = basic_info + [str(disk.get(key)) for key in ['slot', 'model', 'healthy', 'state']],
-                value = disk.get('temperature', 0))
+            label_values = basic_info + [str(disk.get(key)) for key in ['slot', 'model', 'healthy', 'state']]
+
+            self.metrics['hdd_health'].add_metric(labels = label_values, value = 0 if disk.get('healthy') == 'good' else 2)
+            self.metrics['hdd_size'].add_metric(labels = label_values, value = disk.get('size', 0))
+            self.metrics['hdd_poweronhrs'].add_metric(labels = label_values, value = disk.get('poweronhrs', 0))
+            self.metrics['hdd_temperature'].add_metric(labels = label_values, value = disk.get('temperature', 0))
         
         for ldisk in nvr['systemInfo']['ustorage']['space']:
-            st = 0 if ldisk['health'] == 'health' else 2
-            self.metrics['storage_health'].add_metric(labels = basic_info + [ldisk[key] for key in ['device', 'health', 'action', 'space_type']], value = st)
+            self.metrics['storage_health'].add_metric(labels = basic_info + [ldisk[key] for key in ['device', 'health', 'action', 'space_type']], value = 0 if ldisk['health'] == 'health' else 2)
         
         # Memory
         self.metrics['mem_free'].add_metric(labels = basic_info, value = nvr['systemInfo']['memory']['free'])
