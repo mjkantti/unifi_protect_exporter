@@ -7,7 +7,7 @@ import configparser
 import traceback
 
 from sched import scheduler
-from time import time
+from time import time, sleep
 from prometheus_client import start_http_server
 from prometheus_client.context_managers import Timer
 from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, Gauge, Counter, REGISTRY
@@ -167,9 +167,13 @@ class NVRCollector(object):
             self.metrics['cam_state'].add_metric(labels = camInfo + [st], value = state)
 
 
-def run_collection(s, collector, interval):
+def run_collection(s, collector, interval, next_run):
+    while next_run < time():
+        next_run += interval
+
+    s.enterabs(next_run, 1, run_collection, argument=(s, collector, interval, next_run))
+
     logging.info(f"Refreshing {collector.conf['host']}")
-    s.enter(interval, 1, run_collection, argument=(s, collector, interval))
     collector.refresh()
     logging.info(f'Refresh Done')
 
@@ -182,7 +186,7 @@ if __name__ == '__main__':
 
     config.get
 
-    s = scheduler()
+    s = scheduler(time, sleep)
 
     # get params from config parser
     server_config = {
@@ -200,6 +204,8 @@ if __name__ == '__main__':
             continue
 
         interval = int(c.get('polling_interval', 10))
+        start_time = round(time(), -1) + interval
+
         use_https = c.getboolean('use_https', True)
         host = c.get('host')
         scheme = 'https://' if use_https else 'http://'
@@ -212,7 +218,7 @@ if __name__ == '__main__':
         collectors.append(collector)
 
     for collector in collectors:
-        run_collection(s, collector, interval)
+        s.enterabs(start_time, 1, run_collection, argument=(s, collector, interval, start_time))
 
     try:
         server, t = start_http_server(int(server_config.get('port')), server_config.get('address'))
