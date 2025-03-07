@@ -4,13 +4,13 @@
 import requests
 import logging
 import configparser
+import sys
 import traceback
 
 from sched import scheduler
 from time import time
 from prometheus_client import start_http_server
-from prometheus_client.context_managers import Timer
-from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, Gauge, Counter, REGISTRY
+from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, REGISTRY
 
 class NVRCollector(object):
     def __init__(self, conf):
@@ -19,20 +19,9 @@ class NVRCollector(object):
         self.session = requests.Session()
         self.ts = 0
 
-        meta_labels = ['host']
-
-        # Meta Collectors
-        self.host = self.conf['host']
-        self.load_time = Counter(f'unvr_data_load_time', 'Total time spent loading metrics in seconds', labelnames=meta_labels)
-        self.load_count = Counter(f'unvr_data_load_count', 'Total count of metrics loads since reboot', labelnames=meta_labels)
-        self.login_count = Counter(f'unvr_login_count', 'Total Login Count', labelnames=meta_labels)
-        self.login_fails = Counter(f'unvr_login_fail_count', 'UNVR Total Login Fail Count', labelnames=meta_labels)
-        self.last_run = Gauge(f'unvr_data_load_last_run', 'Last run timestamp of metrics load', labelnames=meta_labels)
-        self.error_count = Counter(f'unvr_data_load_errors', 'Data Load Error Count', labelnames=meta_labels)
-
         # Metrics
-        cam_common_label_names = ['name', 'host', 'cameraName', 'cameraHost', 'cameraMac']
         nvr_common_label_names = ['id', 'name', 'host', 'mac']
+        cam_common_label_names = ['name', 'host', 'cameraName', 'cameraHost', 'cameraMac']
 
         self.metrics = {}
         self.metrics['cpu_load'] = GaugeMetricFamily('unvr_cpu_load', 'CPU Average Load', labels=nvr_common_label_names)
@@ -60,41 +49,21 @@ class NVRCollector(object):
         self.metrics['cam_last_disconnect'] = GaugeMetricFamily('unvr_cam_last_disconnect', 'Camera last disconnect', labels=cam_common_label_names)
 
     def collect(self):
-        logging.info(f"Incoming request {self.host}")
+        logging.info(f"Incoming request {self.conf['host']}")
         if time() - self.ts < 15:
             for v in self.metrics.values():
                 yield v
 
     def login(self):
         # start unifi session
-        self.login_count.labels(self.host).inc()
-        logging.warning(f"Login {self.host}")
-        req = self.session.post(self.host + '/api/auth/login', data={'username': self.conf.get('username'), 'password': self.conf.get('password'), 'remember': True}, verify=False)
+        logging.warning(f"Login {self.conf['host']}")
+        req = self.session.post(self.conf.get('host') + '/api/auth/login', data={'username': self.conf.get('username'), 'password': self.conf.get('password'), 'remember': True}, verify=False)
         if req.status_code != 200:
-            self.login_fails.labels(self.host).inc()
             raise Exception(f'Could not login to NVR: {req.text}')
-
-    def refresh(self):
-        err_counter = 0
-        with Timer(self.load_time.labels(self.host), 'inc'), self.error_count.labels(self.host).count_exceptions():
-            while err_counter < 2:
-                try:
-                    j = self.get_data()
-                    self.get_metrics(j)
-                    self.ts = time()
-                    break
-        
-                except Exception as e:
-                    err_counter += 1
-                    logging.error(
-                        f'Unable to collect metrics from NVR. {e}\n{traceback.format_exc()}'
-                    )
-        self.load_count.labels(self.host).inc()
-        self.last_run.labels(self.host).set_to_current_time()
 
     def get_data(self):
         # Get Bootstrap json
-        bootstrap = self.session.get(f"{self.host}/proxy/protect/api/bootstrap")
+        bootstrap = self.session.get(f"{self.conf.get('host')}/proxy/protect/api/bootstrap")
         if bootstrap.status_code == 401:
             logging.info(f'Got error 401, Performing login')
             self.login()
@@ -104,6 +73,21 @@ class NVRCollector(object):
             raise Exception(f'Got Error: {bootstrap.text}')()
 
         return bootstrap.json()
+
+    def refresh(self):
+        err_counter = 0
+        while err_counter < 2:
+            try:
+                j = self.get_data()
+                self.get_metrics(j)
+                self.ts = time()
+                break
+        
+            except Exception as e:
+                err_counter += 1
+                logging.error(
+                    f'Unable to collect metrics from NVR. {e}\n{traceback.format_exc()}'
+                )
 
     def get_metrics(self, js):
         nvr = js['nvr']
