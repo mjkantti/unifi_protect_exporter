@@ -119,28 +119,28 @@ class NVRCollector(object):
             v.samples.clear()
 
         # CPU
-        self.metrics['cpu_load'].add_metric(labels = basic_info, value = nvr['systemInfo']['cpu']['averageLoad'])
-        self.metrics['cpu_temperature'].add_metric(labels = basic_info, value = nvr['systemInfo']['cpu']['temperature'])
+        self.add_metric('cpu_load', basic_info, nvr['systemInfo']['cpu']['averageLoad'])
+        self.add_metric('cpu_temperature', basic_info, nvr['systemInfo']['cpu']['temperature'])
 
         # Hard Disk, what is this?
-        self.metrics['hdd_state'].add_metric(labels = basic_info + [nvr['hardDriveState']], value = 0 if nvr.get('hardDriveState') == 'ok' else 2)
+        self.add_metric('hdd_state', basic_info + [nvr['hardDriveState']], 0 if nvr.get('hardDriveState') == 'ok' else 2)
 
         # HDD
         for disk in nvr['systemInfo']['ustorage']['disks']:
             label_values = basic_info + [str(disk.get(key)) for key in ['slot', 'model', 'healthy', 'state']]
 
-            self.metrics['hdd_health'].add_metric(labels = label_values, value = 0 if disk.get('healthy') == 'good' else 2)
-            self.metrics['hdd_size'].add_metric(labels = label_values, value = disk.get('size', 0))
-            self.metrics['hdd_poweronhrs'].add_metric(labels = label_values, value = disk.get('poweronhrs', 0))
-            self.metrics['hdd_temperature'].add_metric(labels = label_values, value = disk.get('temperature', 0))
+            self.add_metric('hdd_health', label_values, 0 if disk.get('healthy') == 'good' else 2)
+            self.add_metric('hdd_size', label_values, disk.get('size', 0))
+            self.add_metric('hdd_poweronhrs', label_values, disk.get('poweronhrs', 0))
+            self.add_metric('hdd_temperature', label_values, disk.get('temperature', 0))
 
         for ldisk in nvr['systemInfo']['ustorage']['space']:
-            self.metrics['storage_health'].add_metric(labels = basic_info + [ldisk[key] for key in ['device', 'health', 'action', 'space_type']], value = 0 if ldisk['health'] == 'health' else 2)
+            self.add_metric('storage_health', basic_info + [ldisk[key] for key in ['device', 'health', 'action', 'space_type']], 0 if ldisk['health'] == 'health' else 2)
 
         # Memory
-        self.metrics['mem_free'].add_metric(labels = basic_info, value = nvr['systemInfo']['memory']['free'])
-        self.metrics['mem_available'].add_metric(labels = basic_info, value = nvr['systemInfo']['memory']['available'])
-        self.metrics['mem_total'].add_metric(labels = basic_info, value = nvr['systemInfo']['memory']['total'])
+        self.add_metric('mem_free', basic_info, nvr['systemInfo']['memory']['free'])
+        self.add_metric('mem_available', basic_info, nvr['systemInfo']['memory']['available'])
+        self.add_metric('mem_total', basic_info, nvr['systemInfo']['memory']['total'])
 
         # Cameras
         for cam in js.get('cameras', {}):
@@ -148,17 +148,12 @@ class NVRCollector(object):
                 continue
 
             camInfo = [nvrName, nvrHost] + [cam[key] for key in ['name', 'host', 'mac']]
-            if cam.get('lastSeen'):
-                self.metrics['cam_last_seen'].add_metric(labels = camInfo, value = cam.get('lastSeen', 0))
-            if cam.get('lastMotion'):
-                self.metrics['cam_last_motion'].add_metric(labels = camInfo, value = cam['lastMotion'])
-            if cam.get('lastDisconnect'):
-                self.metrics['cam_last_disconnect'].add_metric(labels = camInfo, value = cam['lastDisconnect'])
+            self.add_metric('cam_last_seen', camInfo, cam.get('lastSeen', 0))
+            self.add_metric('cam_last_motion', camInfo, cam['lastMotion'])
+            self.add_metric('cam_last_disconnect', camInfo, cam['lastDisconnect'])
 
-            if cam.get('stats', {}).get('rxBytes'):
-                self.metrics['cam_rxbytes'].add_metric(labels = camInfo, value = cam.get('stats', {}).get('rxBytes', 0))
-            if cam.get('stats', {}).get('txBytes'):
-                self.metrics['cam_txbytes'].add_metric(labels = camInfo, value = cam.get('stats', {}).get('txBytes', 0))
+            self.add_metric('cam_rxbytes', camInfo, cam.get('stats', {}).get('rxBytes', 0))
+            self.add_metric('cam_txbytes', camInfo, cam.get('stats', {}).get('txBytes', 0))
             
             state = -1
             st = cam.get('state')
@@ -168,7 +163,12 @@ class NVRCollector(object):
                 logging.warning(f'Unknown camera state: {st}')
                 pass
 
-            self.metrics['cam_state'].add_metric(labels = camInfo + [st], value = state)
+            self.add_metric('cam_state', camInfo + [st], state)
+
+
+    def add_metric(self, name, labels, value):
+        if value:
+            self.metrics[name].add_metric(labels = labels, value = value)
 
 class ExportProcessor(object):
     def __init__(self):
