@@ -148,10 +148,12 @@ class NVRCollector(object):
                 continue
 
             camInfo = [nvrName, nvrHost] + [cam[key] for key in ['name', 'host', 'mac']]
-            self.metrics['cam_last_seen'].add_metric(labels = camInfo, value = cam['lastSeen'])
+            if cam.get('lastSeen'):
+                self.metrics['cam_last_seen'].add_metric(labels = camInfo, value = cam.get('lastSeen', 0))
             if cam.get('lastMotion'):
                 self.metrics['cam_last_motion'].add_metric(labels = camInfo, value = cam['lastMotion'])
-            self.metrics['cam_last_disconnect'].add_metric(labels = camInfo, value = cam['lastDisconnect'])
+            if cam.get('lastDisconnect'):
+                self.metrics['cam_last_disconnect'].add_metric(labels = camInfo, value = cam['lastDisconnect'])
 
             if cam.get('stats', {}).get('rxBytes'):
                 self.metrics['cam_rxbytes'].add_metric(labels = camInfo, value = cam.get('stats', {}).get('rxBytes', 0))
