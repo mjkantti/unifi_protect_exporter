@@ -5,7 +5,9 @@ import requests
 import logging
 import configparser
 import traceback
+import sys
 
+from signal import signal, SIGTERM, SIGINT
 from sched import scheduler
 from time import time, sleep
 from prometheus_client import start_http_server
@@ -48,11 +50,11 @@ class NVRCollector(object):
         self.metrics['hdd_temperature'] = GaugeMetricFamily('unvr_hard_disk_temperature', 'NVR Hard Disk Temperature', labels=hdd_label_names)
 
         self.metrics['storage_health'] = GaugeMetricFamily('unvr_storage_health', 'NVR Storage Health', labels=nvr_common_label_names + ['device', 'health', 'action', 'space_type'])
-        
+
         self.metrics['mem_free'] = GaugeMetricFamily('unvr_memory_free', 'Memory Free', labels=nvr_common_label_names)
         self.metrics['mem_available'] = GaugeMetricFamily('unvr_memory_available', 'Memory Available', labels=nvr_common_label_names)
         self.metrics['mem_total'] = GaugeMetricFamily('unvr_memory_total', 'Memory Total', labels=nvr_common_label_names)
-        
+
         self.metrics['cam_txbytes'] = CounterMetricFamily('unvr_cam_txbytes', 'Camera TX Bytes', labels=cam_common_label_names)
         self.metrics['cam_rxbytes'] = CounterMetricFamily('unvr_cam_rxbytes', 'Camera RX Bytes', labels=cam_common_label_names)
         self.metrics['cam_state'] = GaugeMetricFamily('unvr_cam_state', 'Camera Status', labels=cam_common_label_names + ['cam_state'])
@@ -84,7 +86,7 @@ class NVRCollector(object):
                     self.get_metrics(j)
                     self.ts = time()
                     break
-        
+
                 except Exception as e:
                     err_counter += 1
                     logging.error(
@@ -131,10 +133,10 @@ class NVRCollector(object):
             self.metrics['hdd_size'].add_metric(labels = label_values, value = disk.get('size', 0))
             self.metrics['hdd_poweronhrs'].add_metric(labels = label_values, value = disk.get('poweronhrs', 0))
             self.metrics['hdd_temperature'].add_metric(labels = label_values, value = disk.get('temperature', 0))
-        
+
         for ldisk in nvr['systemInfo']['ustorage']['space']:
             self.metrics['storage_health'].add_metric(labels = basic_info + [ldisk[key] for key in ['device', 'health', 'action', 'space_type']], value = 0 if ldisk['health'] == 'health' else 2)
-        
+
         # Memory
         self.metrics['mem_free'].add_metric(labels = basic_info, value = nvr['systemInfo']['memory']['free'])
         self.metrics['mem_available'].add_metric(labels = basic_info, value = nvr['systemInfo']['memory']['available'])
@@ -166,64 +168,82 @@ class NVRCollector(object):
 
             self.metrics['cam_state'].add_metric(labels = camInfo + [st], value = state)
 
+class ExportProcessor(object):
+    def __init__(self):
+        signal(SIGINT, self.exit_gracefully)
+        signal(SIGTERM, self.exit_gracefully)
 
-def run_collection(s, collector, interval, next_run):
-    while next_run < time():
-        next_run += interval
+        # set config
+        logging.basicConfig(encoding='utf-8', level=logging.WARNING)
+        requests.packages.urllib3.disable_warnings()
 
-    s.enterabs(next_run, 1, run_collection, argument=(s, collector, interval, next_run))
+        self.config = configparser.ConfigParser()
+        self.config.read('config.ini')
 
-    logging.info(f"Refreshing {collector.conf['host']}")
-    collector.refresh()
-    logging.info(f'Refresh Done')
+        self.s = scheduler(time, sleep)
+
+    def run_collection(self, collector, interval, next_run):
+        while next_run < time():
+            next_run += interval
+
+        self.s.enterabs(next_run, 1, self.run_collection, argument=(collector, interval, next_run))
+    
+        logging.info(f"Refreshing {collector.conf['host']}")
+        collector.refresh()
+        logging.info(f'Refresh Done')
+
+    def exit_gracefully(self, signal, _):
+        logging.warning(f"Caught signal {signal}, stopping")
+        for j in self.s.queue:
+            logging.warning(f'Cancelling scheduler job')
+            self.s.cancel(j)
+
+        logging.info(f'Shut Down HTTP server')
+        if self.server:
+            self.server.shutdown()
+
+        if self.thr:
+            self.thr.join(5)
+
+        logging.info(f'Shut Down Done')
+        sys.exit(1)
+
+
+    def start(self):
+        # get params from config parser
+        server_config = {
+            'port': 8222,
+            'address': '0.0.0.0'
+        }
+
+        collectors = []
+        for n, c in self.config.items():
+            if n == 'DEFAULT':
+                if c.get('port'):
+                    server_config['port'] = c.get('port')
+                if c.get('address'):
+                    server_config['address'] = c.get('address')
+                continue
+
+            interval = int(c.get('polling_interval', 10))
+            start_time = round(time(), -1) + interval
+
+            use_https = c.getboolean('use_https', True)
+            host = c.get('host')
+            scheme = 'https://' if use_https else 'http://'
+            host = scheme + host
+            username = c.get('username')
+            password = c.get('password')
+
+            collector = NVRCollector({'host': host, 'username': username, 'password': password})
+            REGISTRY.register(collector)
+            collectors.append(collector)
+
+        for collector in collectors:
+            self.s.enterabs(start_time, 1, self.run_collection, argument=(collector, interval, start_time))
+
+        self.server, self.thr = start_http_server(int(server_config.get('port')), server_config.get('address'))
+        self.s.run()
 
 if __name__ == '__main__':
-    # set config
-    logging.basicConfig(encoding='utf-8', level=logging.WARNING)
-    requests.packages.urllib3.disable_warnings()
-    config = configparser.ConfigParser()
-    config.read('config.ini')
-
-    config.get
-
-    s = scheduler(time, sleep)
-
-    # get params from config parser
-    server_config = {
-        'port': 8222,
-        'address': '0.0.0.0'
-    }
-
-    collectors = []
-    for n, c in config.items():
-        if n == 'DEFAULT':
-            if c.get('port'):
-                server_config['port'] = c.get('port')
-            if c.get('address'):
-                server_config['address'] = c.get('address')
-            continue
-
-        interval = int(c.get('polling_interval', 10))
-        start_time = round(time(), -1) + interval
-
-        use_https = c.getboolean('use_https', True)
-        host = c.get('host')
-        scheme = 'https://' if use_https else 'http://'
-        host = scheme + host
-        username = c.get('username')
-        password = c.get('password')
-
-        collector = NVRCollector({'host': host, 'username': username, 'password': password})
-        REGISTRY.register(collector)
-        collectors.append(collector)
-
-    for collector in collectors:
-        s.enterabs(start_time, 1, run_collection, argument=(s, collector, interval, start_time))
-
-    try:
-        server, t = start_http_server(int(server_config.get('port')), server_config.get('address'))
-        s.run()
-    
-    except KeyboardInterrupt:
-        server.shutdown()
-        t.join(5)
+    ExportProcessor().start()
