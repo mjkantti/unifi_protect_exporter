@@ -113,20 +113,20 @@ class NVRCollector(object):
         nvrName = nvr['name']
         nvrHost = nvr['host']
 
-        basic_info = [nvr[key] for key in ['id', 'name', 'host', 'mac']]
+        basic_info = [nvr.get(key) for key in ['id', 'name', 'host', 'mac']]
 
         for v in self.metrics.values():
             v.samples.clear()
 
         # CPU
-        self.add_metric('cpu_load', basic_info, nvr['systemInfo']['cpu']['averageLoad'])
-        self.add_metric('cpu_temperature', basic_info, nvr['systemInfo']['cpu']['temperature'])
+        self.add_metric('cpu_load', basic_info, nvr.get('systemInfo', {}).get('cpu', {}).get('averageLoad'))
+        self.add_metric('cpu_temperature', basic_info, nvr.get('systemInfo', {}).get('cpu', {}).get('temperature'))
 
         # Hard Disk, what is this?
         self.add_metric('hdd_state', basic_info + [nvr['hardDriveState']], 0 if nvr.get('hardDriveState') == 'ok' else 2)
 
         # HDD
-        for disk in nvr['systemInfo']['ustorage']['disks']:
+        for disk in nvr.get('systemInfo', {}).get('ustorage', {}).get('disks', []):
             label_values = basic_info + [str(disk.get(key)) for key in ['slot', 'model', 'healthy', 'state']]
 
             self.add_metric('hdd_health', label_values, 0 if disk.get('healthy') == 'good' else 2)
@@ -134,13 +134,13 @@ class NVRCollector(object):
             self.add_metric('hdd_poweronhrs', label_values, disk.get('poweronhrs', 0))
             self.add_metric('hdd_temperature', label_values, disk.get('temperature', 0))
 
-        for ldisk in nvr['systemInfo']['ustorage']['space']:
-            self.add_metric('storage_health', basic_info + [ldisk[key] for key in ['device', 'health', 'action', 'space_type']], 0 if ldisk['health'] == 'health' else 2)
+        for ldisk in nvr.get('systemInfo', {}).get('ustorage', {}).get('space', []):
+            self.add_metric('storage_health', basic_info + [ldisk.get(key) for key in ['device', 'health', 'action', 'space_type']], 0 if ldisk.get('health') == 'health' else 2)
 
         # Memory
-        self.add_metric('mem_free', basic_info, nvr['systemInfo']['memory']['free'])
-        self.add_metric('mem_available', basic_info, nvr['systemInfo']['memory']['available'])
-        self.add_metric('mem_total', basic_info, nvr['systemInfo']['memory']['total'])
+        self.add_metric('mem_free', basic_info, nvr.get('systemInfo', {}).get('memory', {}).get('free'))
+        self.add_metric('mem_available', basic_info, nvr.get('systemInfo', {}).get('memory', {}).get('available'))
+        self.add_metric('mem_total', basic_info, nvr.get('systemInfo', {}).get('memory', {}).get('total'))
 
         # Cameras
         for cam in js.get('cameras', {}):
