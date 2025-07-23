@@ -170,7 +170,10 @@ class NVRCollector(object):
         if value is None:
             return
         
-        self.metrics[name].add_metric(labels = labels, value = value)
+        try:
+            self.metrics[name].add_metric(labels = labels, value = float(value))
+        except ValueError:
+            return
 
 class ExportProcessor(object):
     def __init__(self):
