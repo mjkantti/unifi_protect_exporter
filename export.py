@@ -148,12 +148,12 @@ class NVRCollector(object):
                 continue
 
             camInfo = [nvrName, nvrHost] + [cam.get(key) for key in ['name', 'host', 'mac']]
-            self.add_metric('cam_last_seen', camInfo, cam.get('lastSeen'))
-            self.add_metric('cam_last_motion', camInfo, cam.get('lastMotion'))
-            self.add_metric('cam_last_disconnect', camInfo, cam.get('lastDisconnect'))
+            self.add_metric('cam_last_seen', camInfo, cam.get('lastSeen'), False)
+            self.add_metric('cam_last_motion', camInfo, cam.get('lastMotion'), False)
+            self.add_metric('cam_last_disconnect', camInfo, cam.get('lastDisconnect'), False)
 
-            self.add_metric('cam_rxbytes', camInfo, cam.get('stats', {}).get('rxBytes'))
-            self.add_metric('cam_txbytes', camInfo, cam.get('stats', {}).get('txBytes'))
+            self.add_metric('cam_rxbytes', camInfo, cam.get('stats', {}).get('rxBytes'), False)
+            self.add_metric('cam_txbytes', camInfo, cam.get('stats', {}).get('txBytes'), False)
             
             state = -1
             st = cam.get('state')
@@ -166,8 +166,11 @@ class NVRCollector(object):
             self.add_metric('cam_state', camInfo + [st], state)
 
 
-    def add_metric(self, name, labels, value):
+    def add_metric(self, name, labels, value, add_zero = True):
         if value is None:
+            return
+        
+        if not add_zero and value == 0:
             return
         
         try:
