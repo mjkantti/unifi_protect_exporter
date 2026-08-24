@@ -134,9 +134,6 @@ class NVRCollector(object):
             self.add_metric('hdd_poweronhrs', label_values, disk.get('poweronhrs'))
             self.add_metric('hdd_temperature', label_values, disk.get('temperature'))
 
-        for ldisk in nvr.get('systemInfo', {}).get('ustorage', {}).get('space', []):
-            self.add_metric('storage_health', basic_info + [ldisk.get(key) for key in ['device', 'health', 'action', 'space_type']], 0 if ldisk.get('health') == 'health' else 2)
-
         # Memory
         self.add_metric('mem_free', basic_info, nvr.get('systemInfo', {}).get('memory', {}).get('free'))
         self.add_metric('mem_available', basic_info, nvr.get('systemInfo', {}).get('memory', {}).get('available'))
